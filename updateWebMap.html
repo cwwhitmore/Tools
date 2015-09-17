@@ -12,8 +12,8 @@
   <script type="text/javascript">
     var dojoConfig = { isDebug: true };
   </script>
-  <link rel="stylesheet" type="text/css" href="http://serverapi.arcgisonline.com/jsapi/arcgis/3.3/js/dojo/dijit/themes/claro/claro.css">
-  <script type="text/javascript" src="http://serverapi.arcgisonline.com/jsapi/arcgis/?v=3.3"></script>
+  <link rel="stylesheet" type="text/css" href="https://serverapi.arcgisonline.com/jsapi/arcgis/3.3/js/dojo/dijit/themes/claro/claro.css">
+  <script type="text/javascript" src="https://serverapi.arcgisonline.com/jsapi/arcgis/?v=3.3"></script>
 
 
   <style type="text/css">
@@ -43,7 +43,7 @@
     });
 
     function updateWebMap() {
-      var portal = new esri.arcgis.Portal("http://arcgis.com/sharing/rest");
+      var portal = new esri.arcgis.Portal("https://arcgis.com/sharing/rest");
       portal.signIn().then(getItem);
     }
 
