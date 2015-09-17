@@ -1,0 +1,124 @@
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+  <meta http-equiv="X-UA-Compatible" content="IE=7, IE=9" />
+  <!--The viewport meta tag is used to improve the presentation and behavior of the samples
+    on iOS devices-->
+  <meta name="viewport" content="initial-scale=1, maximum-scale=1,user-scalable=no"/>
+  <title>Update WebMap JSON on Production -- Don't use if you don't know what you are doing!!</title>
+
+  <script type="text/javascript">
+    var dojoConfig = { isDebug: true };
+  </script>
+  <link rel="stylesheet" type="text/css" href="http://serverapi.arcgisonline.com/jsapi/arcgis/3.3/js/dojo/dijit/themes/claro/claro.css">
+  <script type="text/javascript" src="http://serverapi.arcgisonline.com/jsapi/arcgis/?v=3.3"></script>
+
+
+  <style type="text/css">
+    #content {
+      width: 400px; height: 350px; padding: 5px; overflow: auto;
+      border: solid 2px #AAAAAA; background-color: #FFFFFF;
+      -moz-border-radius: 5px; -webkit-border-radius: 5px; -o-border-radius: 5px; border-radius: 5px;
+      -moz-box-shadow: 0 0 0.5em black; -webkit-box-shadow: 0 0 0.5em black; -o-box-shadow: 0 0 0.5em black; box-shadow: 0 0 0.5em black;
+    }
+    .failure { color: red; }
+    #status { font-size: 12px; }
+  </style>
+
+  <script type="text/javascript">
+    dojo.require("esri.arcgis.Portal");
+
+    dojo.addOnLoad(function() {
+      esri.config.defaults.io.proxyUrl = "/arcgisserver/apis/javascript/proxy/proxy.ashx";
+
+      esri.id.setProtocolErrorHandler(function() {
+	    console.log("Protocol mismatch error...");
+	    // return true from this handler if you want to proceed anyway
+	    // with the protocol mismatch
+	    //return window.confirm("This application is going to send your credentials across a non secure protocal.  Proceed?");
+	    return true;
+	  });
+    });
+
+    function updateWebMap() {
+      var portal = new esri.arcgis.Portal("http://arcgis.com/sharing/rest");
+      portal.signIn().then(getItem);
+    }
+
+    function getItem(user) {
+      var webMapId = dojo.byId("webMapId").value;
+      var itemUrl = user.portal.url + "/content/items/"+webMapId;
+      var request = esri.request({
+        url: itemUrl,
+        content: {"f":"json"}
+      });
+      request.then(dojo.partial(getWebMapText,user,itemUrl));
+    }
+
+    function getWebMapText(user,itemUrl,item) {
+      if (item.type === "Web Map") {
+        //get current webmap text
+        var request = esri.request({
+          url: itemUrl + "/data",
+          content: {"f":"json"}
+        });
+        request.then(dojo.partial(updateWebMapText,item, user));
+      } else {
+        alert("Not a Webmap item!");
+      }
+    }
+
+    function updateWebMapText(item, user, currentWebMapText) {
+      dojo.byId("currentWebMapText").value = dojo.toJson(currentWebMapText);
+      var folder = (item.ownerFolder) ? "/" + item.ownerFolder : "";
+      var userItemUrl = user.userContentUrl + folder + "/items/" + item.id;
+
+      var contentUpdate = {"text":dojo.byId("webMapText").value, "f":"json"};
+      var request = esri.request({
+        url: userItemUrl + "/update",
+        content: contentUpdate
+      },{usePost:true});
+      request.then(requestSucceeded);
+      //console.log(userItemUrl);
+    }
+
+    function requestSucceeded(response, io) {
+      console.log("Succeeded: ", response);
+      requestCompleted();
+
+      // dojo.toJson method converts the given JavaScript object
+      // and its properties and values into simple text.
+      dojo.toJsonIndentStr = "  ";
+      dojo.byId("content").value = dojo.toJson(response, true);
+
+
+    }
+
+    function requestCompleted() {
+      dojo.byId("status").innerHTML = "Done.";
+      var reset = function() {
+        dojo.byId("status").innerHTML = "";
+      };
+      setTimeout(reset, 2000);
+    }
+
+  </script>
+</head>
+
+<body class="claro" style="font-family: Arial Unicode MS,Arial,sans-serif;">
+  <p>
+    Enter WebMap ID here: <input type="text" id="webMapId" size="40" value=""/><br/>
+    Enter New WebMap JSON here: <input type="text" id="webMapText" size="40" /><br/>
+    Current WebMap Text: <input type="text" id="currentWebMapText" size="40" /><br/>
+    <input type="button" value="UpdateWebMap" onclick="updateWebMap();" /> <br/>
+
+    <span id="status"></span>
+  </p>
+  <p>
+    <p>Response:</p>
+    <textarea id="content"></textarea>
+  </p>
+</body>
+</html>
