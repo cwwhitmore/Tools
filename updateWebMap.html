@@ -1,124 +1,168 @@
-
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
-<html>
-<head>
-  <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
-  <meta http-equiv="X-UA-Compatible" content="IE=7, IE=9" />
-  <!--The viewport meta tag is used to improve the presentation and behavior of the samples
-    on iOS devices-->
-  <meta name="viewport" content="initial-scale=1, maximum-scale=1,user-scalable=no"/>
-  <title>Update WebMap JSON on Production -- Don't use if you don't know what you are doing!!</title>
-
-  <script type="text/javascript">
-    var dojoConfig = { isDebug: true };
-  </script>
-  <link rel="stylesheet" type="text/css" href="https://serverapi.arcgisonline.com/jsapi/arcgis/3.3/js/dojo/dijit/themes/claro/claro.css">
-  <script type="text/javascript" src="https://serverapi.arcgisonline.com/jsapi/arcgis/?v=3.3"></script>
-
-
-  <style type="text/css">
-    #content {
-      width: 400px; height: 350px; padding: 5px; overflow: auto;
-      border: solid 2px #AAAAAA; background-color: #FFFFFF;
-      -moz-border-radius: 5px; -webkit-border-radius: 5px; -o-border-radius: 5px; border-radius: 5px;
-      -moz-box-shadow: 0 0 0.5em black; -webkit-box-shadow: 0 0 0.5em black; -o-box-shadow: 0 0 0.5em black; box-shadow: 0 0 0.5em black;
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<!-- saved from url=(0041)http://jyang/update_arcgis_item_test.html -->
+<html class="dj_webkit dj_chrome dj_contentbox"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <meta http-equiv="X-UA-Compatible" content="IE=7,IE=9">
+    <!--The viewport meta tag is used to improve the presentation and behavior of the samples 
+      on iOS devices-->
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1,user-scalable=no">
+    <title>Update ArcGIS Online Item JSON</title>
+    <link rel="stylesheet" type="text/css" href="./Update_ArcGIS_Online_Item_JSON_files/claro.css">
+    <link rel="stylesheet" href="http://codemirror.net/lib/codemirror.css">
+    
+    <script type="text/javascript" charset="utf-8" src="./Update_ArcGIS_Online_Item_JSON_files/jsapi_en-us.js"></script><script type="text/javascript" charset="utf-8" src="./Update_ArcGIS_Online_Item_JSON_files/svg.js"></script><script type="text/javascript" charset="utf-8" src="./Update_ArcGIS_Online_Item_JSON_files/Portal.js"></script><script type="text/javascript" charset="utf-8" src="./Update_ArcGIS_Online_Item_JSON_files/DeferredList.js"></script><script src="./Update_ArcGIS_Online_Item_JSON_files/codemirror.js"></script>
+    <script src="./Update_ArcGIS_Online_Item_JSON_files/javascript.js"></script>
+    <script type="text/javascript" src="./Update_ArcGIS_Online_Item_JSON_files/jsl.parser.js"></script>
+    <script type="text/javascript" src="//js.arcgis.com/3.9/"></script>
+    <script type="text/javascript">var djConfig = {parseOnLoad: true};</script>
+    <style type="text/css">
+    input {
+      width: 300px;
     }
-    .failure { color: red; }
-    #status { font-size: 12px; }
-  </style>
-
-  <script type="text/javascript">
-    dojo.require("esri.arcgis.Portal");
-
-    dojo.addOnLoad(function() {
-      esri.config.defaults.io.proxyUrl = "/arcgisserver/apis/javascript/proxy/proxy.ashx";
-
-      esri.id.setProtocolErrorHandler(function() {
-	    console.log("Protocol mismatch error...");
-	    // return true from this handler if you want to proceed anyway
-	    // with the protocol mismatch
-	    //return window.confirm("This application is going to send your credentials across a non secure protocal.  Proceed?");
-	    return true;
-	  });
-    });
-
-    function updateWebMap() {
-      var portal = new esri.arcgis.Portal("https://www.arcgis.com/sharing/rest");
-      portal.signIn().then(getItem);
+    textarea {
+      width: 800px;
+      height: 400px;
     }
-
-    function getItem(user) {
-      var webMapId = dojo.byId("webMapId").value;
-      var itemUrl = user.portal.url + "/content/items/"+webMapId;
-      var request = esri.request({
-        url: itemUrl,
-        content: {"f":"json"}
-      });
-      request.then(dojo.partial(getWebMapText,user,itemUrl));
-    }
-
-    function getWebMapText(user,itemUrl,item) {
-      if (item.type === "Web Map") {
-        //get current webmap text
-        var request = esri.request({
-          url: itemUrl + "/data",
-          content: {"f":"json"}
+    .CodeMirror {
+      outline: #888 solid 1px;
+    };
+    </style>
+    <script type="text/javascript">
+      dojo.require("esri.arcgis.Portal");
+      function init() {
+        //esri.config.defaults.io.corsEnabledServers.push("http://jsapibuild:8080/online_service/utility/validateJson"); //enable CORS with JSON validate service
+        var itemInfo = {}; //an object used to store item information across functions
+        dojo.connect(dojo.byId("load"), "onclick", function(){
+          itemInfo.portalUrl = 'https://www.arcgis.com';
+          itemInfo.itemId = dojo.byId("itemId").value;
+          portalSignIn(itemInfo.portalUrl) //sign in to portal
+            .then(dojo.partial(findItem, itemInfo)) //find item by id
+            .then(dojo.partial(getData, itemInfo)) //get item data
+            .then(dojo.partial(intoTextarea, itemInfo), showError); //insert item data into textarea, handle the error if returned
         });
-        request.then(dojo.partial(updateWebMapText,item, user));
-      } else {
-        alert("Not a Webmap item!");
-      }
-    }
-
-    function updateWebMapText(item, user, currentWebMapText) {
-      dojo.byId("currentWebMapText").value = dojo.toJson(currentWebMapText);
-      var folder = (item.ownerFolder) ? "/" + item.ownerFolder : "";
-      var userItemUrl = user.userContentUrl + folder + "/items/" + item.id;
-
-      var contentUpdate = {"text":dojo.byId("webMapText").value, "f":"json"};
-      var request = esri.request({
-        url: userItemUrl + "/update",
-        content: contentUpdate
-      },{usePost:true});
-      request.then(requestSucceeded);
-      //console.log(userItemUrl);
-    }
-
-    function requestSucceeded(response, io) {
-      console.log("Succeeded: ", response);
-      requestCompleted();
-
-      // dojo.toJson method converts the given JavaScript object
-      // and its properties and values into simple text.
-      dojo.toJsonIndentStr = "  ";
-      dojo.byId("content").value = dojo.toJson(response, true);
-
-
-    }
-
-    function requestCompleted() {
-      dojo.byId("status").innerHTML = "Done.";
-      var reset = function() {
-        dojo.byId("status").innerHTML = "";
+        dojo.connect(dojo.byId("submit"), "onclick", function(){
+          itemInfo.codeMirror.save();
+          var submitData = itemInfo.codeMirror.getTextArea().value.replace(/\t/g,'  ');
+          dojo.byId("submit").disabled = true;
+          //jsonValidate(submitData) //validate JSON string
+          //  .then(dojo.partial(updateData, submitData, itemInfo)); //update item data
+          //using new validator
+          try {
+            var result = jsl.parser.parse(submitData);
+            dojo.byId("status").innerHTML = 'Valid JSON.';
+            dojo.byId("submit").disabled = false;
+            
+            esri.request({
+              url: itemInfo.portalUrl + '/sharing/rest/content/users/' + itemInfo.userId + itemInfo.folderPath + '/items/' + itemInfo.itemId + '/update',
+              content: {
+                text: dojo.toJson(dojo.fromJson(submitData)),
+                f: 'json',
+                token: itemInfo.userToken
+              }
+            }, {
+              usePost: true
+            }).then(showResults);
+          } catch (parseException) {
+            console.log(parseException.message);
+            dojo.byId("status").innerHTML = '<pre>' + parseException.message + '</pre>';
+            dojo.byId("submit").disabled = false;
+          };
+        });
       };
-      setTimeout(reset, 2000);
-    }
+      
+      function portalSignIn(url) {
+        var portal = new esri.arcgis.Portal(url);
+        return portal.signIn();
+      };
+      
+      function findItem(itemInfo, portalUser){
+        itemInfo.userId = portalUser.username;
+        itemInfo.userToken = portalUser.credential.token;
+        var findItemRequest = esri.request({
+          url: portalUser.portal.portalUrl + '/content/items/' + itemInfo.itemId + '?f=json&token=' + itemInfo.userToken
+        });
+        return findItemRequest.then();
+      };
+      
+      function getData(itemInfo, portalItem) {
+        dojo.byId("itemTitle").innerHTML = portalItem.title;
+        itemInfo.folderPath = portalItem.ownerFolder === null ? '' : '/' + portalItem.ownerFolder;
+        var getDataRequest = esri.request({
+          url: itemInfo.portalUrl + '/sharing/rest/content/items/' + itemInfo.itemId + '/data?f=json&token=' + itemInfo.userToken
+        });
+        return getDataRequest.then();
+      };
+      
+      function intoTextarea(itemInfo, itemData){
+        if (itemInfo.codeMirror) { itemInfo.codeMirror.toTextArea() }; //kill codeMirror if already exist
+        dojo.byId("textarea").value = dojo.toJson(itemData, true).replace(/\t/g,'  ');
+        dojo.byId("submit").disabled = false;
+        dojo.byId("status").innerHTML = 'Item ' + itemInfo.itemId + ' loaded.';
+        //the code below turns the existing textarea into a prettified editable div (codeMirror)
+        //code Mirror is stored in itemInfo for later uses
+        itemInfo.codeMirror = CodeMirror.fromTextArea(dojo.byId("textarea"),{
+          lineNumbers: true,
+          tabSize: 2,
+          matchBrackets: true,
+          extraKeys: {"Enter": "newlineAndIndentContinueComment"}
+        });
+        itemInfo.codeMirror.setSize(800, 400);
+      };
+      
+      function showError(error){
+        dojo.byId("status").innerHTML = 'Error: ' + error.message;
+        dojo.byId("submit").disabled = true;
+      };
+      
+      function jsonValidate(jsonString){
+        return esri.request({
+          url: 'http://jsapibuild:8080/online_service/utility/validateJson',
+          content: { json: jsonString }
+        }).then();
+      };
+      
+      function updateData(submitData, itemInfo, jsonValid){
+        if (jsonValid.isValid) {
+          dojo.byId("status").innerHTML = 'Valid JSON.';
+          esri.request({
+            url: itemInfo.portalUrl + '/sharing/rest/content/users/' + itemInfo.userId + itemInfo.folderPath + '/items/' + itemInfo.itemId + '/update',
+            content: {
+              text: dojo.toJson(dojo.fromJson(submitData)),
+              f: 'json',
+              token: itemInfo.userToken
+            }
+          }, {
+            usePost: true
+          }).then(showResults);
+        } else {
+          console.log('Failed. ' + jsonValid.message);
+          dojo.byId("status").innerHTML = jsonValid.message;
+          dojo.byId("submit").disabled = false;
+        };
+      };
+      
+      function showResults(results){
+        console.log(results);
+        dojo.byId("status").innerHTML += ' Update success.';
+        setTimeout(function(){
+          dojo.byId("submit").disabled = false;
+          dojo.byId("status").innerHTML = '';
+        },2000);
+      };
 
-  </script>
-</head>
-
-<body class="claro" style="font-family: Arial Unicode MS,Arial,sans-serif;">
-  <p>
-    Enter WebMap ID here: <input type="text" id="webMapId" size="40" value=""/><br/>
-    Enter New WebMap JSON here: <input type="text" id="webMapText" size="40" /><br/>
-    Current WebMap Text: <input type="text" id="currentWebMapText" size="40" /><br/>
-    <input type="button" value="UpdateWebMap" onclick="updateWebMap();" /> <br/>
-
-    <span id="status"></span>
-  </p>
-  <p>
-    <p>Response:</p>
-    <textarea id="content"></textarea>
-  </p>
-</body>
-</html>
+      dojo.addOnLoad(init);
+    </script>
+  <link type="text/css" rel="stylesheet" href="chrome-extension://cpngackimfmofbokmjmljamhdncknpmg/style.css"><script type="text/javascript" charset="utf-8" src="chrome-extension://cpngackimfmofbokmjmljamhdncknpmg/js/page_context.js"></script></head>
+  <body class="claro" style="font-family:Arial Unicode MS,Arial,sans-serif;" screen_capture_injected="true">
+    <p>
+      <div><b>Item ID:</b> <input id="itemId" type="text"></div>
+      <div><button id="load">Load Item</button></div>
+    <p></p>
+    <p>
+      </p><div><b>Title:</b> <span id="itemTitle"></span></div>
+      <textarea id="textarea"></textarea>
+      <div><button id="submit" disabled="">Validate &amp; Submit</button></div>
+    <p></p>
+    <p><b>Status:</b> <span id="status"></span></p>
+  
+</body></html>
