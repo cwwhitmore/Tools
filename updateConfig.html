@@ -1,0 +1,233 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+  <meta http-equiv="X-UA-Compatible" content="IE=7, IE=9" />
+  <meta name="viewport" content="initial-scale=1, maximum-scale=1,user-scalable=no"/>
+  <title>Update WebMap JSON -- Don't use if you don't know what you are doing!!</title>
+
+  <script type="text/javascript">
+    var dojoConfig = { isDebug: true };
+  </script>
+  <link rel="stylesheet" href="https://js.arcgis.com/4.0beta1/esri/css/esri.css">
+  <link rel="stylesheet" type="text/css" href="//js.arcgis.com/4.0beta1/dijit/themes/claro/claro.css">
+  <script src="https://js.arcgis.com/4.0beta1/"></script>
+
+  <script>
+    
+    var portal;
+    var user = {};
+
+    require([
+      "esri/identity/IdentityManager",
+      "esri/portal/Portal",
+      "dojo/_base/lang",      
+      "dojo/dom",
+      "dojo/on",
+      "dojo/_base/Deferred",
+      "esri/request",
+      "dojo/domReady!"
+    ], function (esriId, Portal, lang, dom, on, Deferred, request){
+
+//        esri.config.defaults.io.proxyUrl = "/arcgisserver/apis/javascript/proxy/proxy.ashx";
+  
+        esriId.setProtocolErrorHandler(function() {
+          console.log("Protocol mismatch error...");
+          // return true from this handler if you want to proceed anyway
+          // with the protocol mismatch
+          //return window.confirm("This application is going to send your credentials across a non secure protocol.  Proceed?");
+          return true;
+        });
+
+        on(dom.byId("getWebMap_A"), "click", function(){
+          getWebMap("A");
+        });    
+        on(dom.byId("getWebMap_B"), "click", function(){
+          getWebMap("B");
+        });    
+        on(dom.byId("updateWebMap_A"), "click", function(){
+          updateWebMap("A");
+        });    
+        on(dom.byId("updateWebMap_B"), "click", function(){
+          updateWebMap("B");
+        });    
+        on(dom.byId("clear_A"), "click", function(){
+          dom.byId("content_A").value = "";
+        });    
+        on(dom.byId("clear_B"), "click", function(){
+          dom.byId("content_B").value = "";
+        });    
+
+        function getWebMap(type) {
+    
+          var id = dom.byId("webMapId_"+type).value;
+          if (!id.length) {
+            dojo.byId("status_"+type).innerHTML = "No WebMap ID entered.";
+            return;
+          }
+          
+          signIn(type).then(lang.hitch(this, getItem, type)).then(lang.hitch(this, getWebMapConfig, type));
+        }
+        
+        function updateWebMap(type) {
+          
+          var text = dom.byId("content_"+type).value;
+          if (!text.length) {
+            dojo.byId("status_"+type).innerHTML = "No WebMap config available.";
+            return;
+          }
+          
+          signIn(type).then(lang.hitch(this, getItem, type)).then(lang.hitch(this, updateWebMapConfig, type));
+        }
+        
+        function signIn(type) {
+    
+          dom.byId("status_"+type).innerHTML = "";
+    
+          var deferred = new Deferred();
+          if (this.portal && this.portal.__type === type && this.portal.url.indexOf(dom.byId("host_"+type).value) > -1) {
+            deferred.resolve();
+          } else {
+            //this.portal && this.portal.signOut();
+            this.portal = null;
+            esriId.destroyCredentials();
+            esriId.useSignInPage = false;
+            this.portal = new Portal({
+              url: "http://"+dom.byId("host_"+type).value+"/sharing/rest"
+            });
+            this.portal.__type = type;
+            this.portal.signIn().then(lang.hitch(this,function(type, user) {
+              this.user[type] = user;
+              dom.byId("user_"+type).innerHTML = this.user[type].username;
+              deferred.resolve();
+            }, type), function(error) {
+              console.log("signIn Error:", error);
+              deferred.reject();
+            });
+          }
+          return deferred;
+        }
+    
+        function getItem(type) {
+          
+          var webMapId = dom.byId("webMapId_"+type).value;
+          var itemUrl = this.user[type].portal.url + "/content/items/"+webMapId;
+          var req = request({
+            url: itemUrl,
+            content: {"f":"json"}
+          });
+          return req;
+        }
+    
+        function getWebMapConfig(type, item) {
+          
+          if (item.type === "Web Map") {
+            dom.byId("title_"+type).innerHTML = item.title;
+            //get current webmap text
+            var webMapId = dom.byId("webMapId_"+type).value;
+            var itemUrl = this.user[type].portal.url + "/content/items/"+webMapId;
+            var req = request({
+              url: itemUrl + "/data",
+              content: {"f":"json"}
+            });
+            req.then(lang.hitch(this, function(type, response, io) {
+              dom.byId("content_"+type).value = JSON.stringify(response, null, 2);
+            }, type), function() {
+              dom.byId("status_"+type).innerHTML = "Error getting WebMap.";
+            });
+          } else {
+            dom.byId("status_"+type).innerHTML = "Not a Webmap item.";
+          }
+        }
+    
+        function updateWebMapConfig(type, item) {
+          
+          if (item.type === "Web Map") {
+            dom.byId("title_"+type).innerHTML = item.title;
+            var folder = (item.ownerFolder) ? "/" + item.ownerFolder : "";
+            var userItemUrl = this.user[type].userContentUrl + folder + "/items/" + item.id;
+            var contentUpdate = {"text":dom.byId("content_"+type).value, "f":"json"};
+            var req = request({
+              url: userItemUrl + "/update",
+              content: contentUpdate
+            },{usePost:true});
+            req.then(lang.hitch(this, function() {
+              dom.byId("status_"+type).innerHTML = "WebMap updated successfully.";
+            }, type), function() {
+              dom.byId("status_"+type).innerHTML = "Error updating WebMap.";
+            });
+          } else {
+            dom.byId("status_"+type).innerHTML = "Not a Webmap item.";
+          }
+        }
+    
+    });
+  </script>
+</head>
+
+<body class="claro" style="font-family: Arial Unicode MS,Arial,sans-serif;">
+  <p>
+    <table border="1"><tbody><tr><td>
+
+      <table><tbody><tr><td>
+        Host:
+      </td><td>
+        <select id="host_A">
+          <option value="devext.arcgis.com" selected>devext.arcgis.com</option>
+          <option value="qaext.arcgis.com">qaext.arcgis.com</option>
+          <option value="www.arcgis.com">www.arcgis.com</option>
+        </select>
+        &nbsp;&nbsp;&nbsp;
+        <span id="user_A"></span>
+      </td></tr><tr><td>
+        WebMap ID: 
+      </td><td>
+        <input type="text" id="webMapId_A" maxlength="250" style="width:90%;padding:2px 0 2px 0;" value=""/>
+      </td></tr><tr><td>
+        WebMap Title: 
+      </td><td>
+        <span id="title_A"></span></soan>
+      </td></tr><tr><td colspan="2">
+        <textarea id="content_A" rows="40" cols="80"></textarea>
+      </td></tr><tr><td colspan="2">
+        <button id="getWebMap_A">Get WebMap Config</button>
+        <button id="updateWebMap_A">Update WebMap Config</button>
+        <button id="clear_A">Clear</button>
+      </td></tr><tr><td colspan="2">
+        &nbsp;<span id="status_A"></span>
+      </td></tr></tbody></table>
+
+    </td><td>
+
+      <table><tbody><tr><td>
+        Host:
+      </td><td>
+        <select id="host_B">
+          <option value="devext.arcgis.com">devext.arcgis.com</option>
+          <option value="qaext.arcgis.com">qaext.arcgis.com</option>
+          <option value="www.arcgis.com" selected>www.arcgis.com</option>
+        </select>
+        &nbsp;&nbsp;&nbsp;
+        <span id="user_B"></span>
+      </td></tr><tr><td>
+        WebMap ID: 
+      </td><td>
+        <input type="text" id="webMapId_B" maxlength="250" style="width:90%;padding:2px 0 2px 0;" value=""/>
+      </td></tr><tr><td>
+        WebMap Title: 
+      </td><td>
+        <span id="title_B"></span></soan>
+      </td></tr><tr><td colspan="2">
+        <textarea id="content_B" rows="40" cols="80"></textarea>
+      </td></tr><tr><td colspan="2">
+        <button id="getWebMap_B">Get WebMap Config</button>
+        <button id="updateWebMap_B">Update WebMap Config</button>
+        <button id="clear_B">Clear</button>
+      </td></tr><tr><td colspan="2">
+        &nbsp;<span id="status_B"></span>
+      </td></tr></tbody></table>
+
+    </td></tr></tbody></table>
+    FYI: Because you can only be logged in as one user at a time you need to login again if you switch between users.
+</body>
+</html>
